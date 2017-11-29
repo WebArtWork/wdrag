@@ -1,4 +1,3 @@
-angular.module("wdrag", ["ngDraggable"]);
 /*
  *
  * https://github.com/fatlinesofcode/ngDraggable
