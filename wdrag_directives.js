@@ -1,25 +1,105 @@
-/*
- *
- * https://github.com/fatlinesofcode/ngDraggable
- */
-angular.module("ngDraggable", [])
-.service('wdrag', [function() {
-}]).service('ngDraggable', [function() {
-    var scope = this;
-    scope.inputEvent = function(event) {
-        if(!event) return;
-        if (angular.isDefined(event.touches)) {
-            return event.touches[0];
-        }
-        //Checking both is not redundent. If only check if touches isDefined, angularjs isDefnied will return error and stop the remaining scripty if event.originalEvent is not defined.
-        else if (angular.isDefined(event.originalEvent) && angular.isDefined(event.originalEvent.touches)) {
-            return event.originalEvent.touches[0];
-        }
-        return event;
-    };
-    scope.touchTimeout = 100;
-}])
-.directive('ngDrag', ['wdrag', '$timeout', '$rootScope', '$parse', '$document', '$window', 'ngDraggable', function (wdrag, $timeout, $rootScope, $parse, $document, $window, ngDraggable) {
+angular.module("wdrag_directives", []).directive('wdmoderators', function(){
+	"ngInject";
+	return {
+		restrict: 'AE',
+		scope: {
+			arr: '=',
+			users: '=',
+			holder: '@',
+			change: '&'
+		}, templateUrl: 'wdrag_wdmoderators.html'
+	}
+}).directive('wsort', function(){
+	"ngInject";
+	return {
+		restrict: 'AE',
+		transclude: true,
+		scope: {
+			arr: '=',
+			modify: '=',
+			click: '&',
+			bag: '@',
+			change: '&'
+		}, templateUrl: 'wdrag_wsort.html',
+		link: function(scope, iElement, iAttrs, controller, transcludeFn) {
+			//transcludeFn(null, null);
+		}, controller: function($scope, wdrag, $timeout){
+			if(!$scope.arr) return;
+			if(typeof wdrag.bags != 'object') wdrag.bags={};
+			if(!Array.isArray(wdrag.bags[$scope.bag])){
+				wdrag.bags[$scope.bag]=[];
+				wdrag.bags[$scope.bag+'_modify']=[];
+			}
+			wdrag.bags[$scope.bag].push($scope.arr);
+			if($scope.modify) wdrag.bags[$scope.bag+'_modify'].push($scope.modify);
+			let refresh = () => {
+				for (var j = 0; j < wdrag.bags[$scope.bag].length; j++) {
+					for (var i = 0; i < wdrag.bags[$scope.bag][j].length; i++) {
+						if(typeof wdrag.bags[$scope.bag][j][i] == 'string')
+							return $timeout(refresh, 500);
+						wdrag.bags[$scope.bag][j][i].index = (i*wdrag.bags[$scope.bag].length)+j;
+					}
+				}
+			}, end_drag, clicked = true;
+			refresh();
+			$scope.sd = {};
+			$scope.$on('draggable:start', function(e, item) {
+				$scope.dragging = item.data;
+				clicked = false;
+				for (var j = 0; j < wdrag.bags[$scope.bag].length; j++) {
+					wdrag.bags[$scope.bag + '_modify'][j].modified = false;
+					for (var i = 0; i < wdrag.bags[$scope.bag][j].length; i++) {
+						if (wdrag.bags[$scope.bag][j][i].index == $scope.dragging.index) {
+							wdrag.bags[$scope.bag + '_modify'][j].modified = true;
+							break;
+						}
+					}
+				}
+			});
+			$scope.$on('draggable:end', function(e) {
+				$scope.dragging = null;
+				if(clicked&&typeof $scope.click == 'function') $scope.click({
+					obj: $scope.sd.obj
+				});
+				clicked = true;
+				end_drag&&end_drag();
+				end_drag=null;
+			});
+			wdrag.onplace = function(place) {
+				if (typeof place != 'number') return refresh_index();
+				$timeout(function() {
+					for (var j = 0; j < wdrag.bags[$scope.bag].length; j++) {
+						let found = false;
+						for (var i = 0; i < wdrag.bags[$scope.bag][j].length; i++) {
+							if (wdrag.bags[$scope.bag][j][i].index == $scope.dragging.index) {
+								wdrag.bags[$scope.bag+'_modify'][j].modified = true;
+								found = true;
+								break;
+							}
+						}
+						if(found) break;
+					}
+					for (var k = 0; k < wdrag.bags[$scope.bag].length; k++) {
+						let found = false;
+						for (var l = 0; l < wdrag.bags[$scope.bag][k].length; l++) {
+							if (wdrag.bags[$scope.bag][k][l].index == place) {
+								wdrag.bags[$scope.bag][j].splice(i, 1);
+								wdrag.bags[$scope.bag][k].splice(l, 0, $scope.dragging);
+								end_drag = () => {
+									wdrag.bags[$scope.bag + '_modify'][k].modified = true;
+									if(typeof $scope.change == 'function') $scope.change();
+								}
+								found = true;
+								break;
+							}
+						}
+						if(found) break;
+					}
+				});
+			}
+		}
+	}
+}).directive('ngDrag', ['wdrag', '$timeout', '$rootScope', '$parse', '$document', '$window', 'ngDraggable', function (wdrag, $timeout, $rootScope, $parse, $document, $window, ngDraggable) {
     return {
         restrict: 'A',
         link: function (scope, element, attrs) {
@@ -259,8 +339,7 @@ angular.module("ngDraggable", [])
             initialize();
         }
     };
-}])
-.directive('ngDrop', ['wdrag', '$parse', '$timeout', '$window', '$document', 'ngDraggable', function (wdrag, $parse, $timeout, $window, $document, ngDraggable) {
+}]).directive('ngDrop', ['wdrag', '$parse', '$timeout', '$window', '$document', 'ngDraggable', function (wdrag, $parse, $timeout, $window, $document, ngDraggable) {
     return {
         restrict: 'A',
         link: function (scope, element, attrs) {
@@ -317,7 +396,9 @@ angular.module("ngDraggable", [])
 
                 var send = _lastDropTouch != element;
                 if(isTouching(obj.x,obj.y,obj.element)&&send){
-                    typeof wdrag.onplace=='function'&&wdrag.onplace(scope.$eval(attrs.ngDropIndex));
+                    if(typeof wdrag.onplace=='function'){
+                    	wdrag.onplace(scope.$eval(attrs.ngDropIndex));
+                    }
                 };
 
                 if (attrs.ngDragMove) {
@@ -391,8 +472,7 @@ angular.module("ngDraggable", [])
             initialize();
         }
     };
-}])
-.directive('ngDragClone', ['$parse', '$timeout', 'ngDraggable', function ($parse, $timeout, ngDraggable) {
+}]).directive('ngDragClone', ['$parse', '$timeout', 'ngDraggable', function ($parse, $timeout, ngDraggable) {
     return {
         restrict: 'A',
         link: function (scope, element, attrs) {
@@ -482,8 +562,7 @@ angular.module("ngDraggable", [])
             initialize();
         }
     };
-}])
-.directive('ngPreventDrag', ['$parse', '$timeout', function ($parse, $timeout) {
+}]).directive('ngPreventDrag', ['$parse', '$timeout', function ($parse, $timeout) {
     return {
         restrict: 'A',
         link: function (scope, element, attrs) {
@@ -515,16 +594,14 @@ angular.module("ngDraggable", [])
             initialize();
         }
     };
-}])
-.directive('ngCancelDrag', [function () {
+}]).directive('ngCancelDrag', [function () {
     return {
         restrict: 'A',
         link: function (scope, element, attrs) {
             element.find('*').attr('ng-cancel-drag', 'ng-cancel-drag');
         }
     };
-}])
-.directive('ngDragScroll', ['$window', '$interval', '$timeout', '$document', '$rootScope', function($window, $interval, $timeout, $document, $rootScope) {
+}]).directive('ngDragScroll', ['$window', '$interval', '$timeout', '$document', '$rootScope', function($window, $interval, $timeout, $document, $rootScope) {
     return {
         restrict: 'A',
         link: function(scope, element, attrs) {
@@ -653,51 +730,4 @@ angular.module("ngDraggable", [])
             });
         }
     };
-}]).directive('wsort', function($parse, $timeout){
-	return {
-		restrict: 'EA', transclude: 'wsort',
-		controller: function($scope, wdrag) {
-			$scope.$on('draggable:start', function(e, item) {
-				$scope.dragging = item.data;
-			});
-			$scope.$on('draggable:end', function(e) {
-				$scope.dragging = null;
-			});
-			wdrag.onplace = function(place) {
-				if (typeof place != 'number') return;
-				$timeout(function() {
-					for (var i = 0; i < $scope.arr.length; i++) {
-						if ($scope.arr[i].$$hashKey == $scope.dragging.$$hashKey) {
-							$scope.arr.splice(i, 1);
-							$scope.arr.splice(place, 0, $scope.dragging);
-							break;
-						}
-					}
-				});
-			}
-		}, compile: function(tElement, tAttrs, transclude) {
-			var rpt = document.createAttribute('ng-repeat');
-			rpt.nodeValue = tAttrs.wsort;
-			tElement[0].children[0].attributes.setNamedItem(rpt);
-			var fillArr = function(scope, rhs) {
-				scope.arr = $parse(rhs[0])(scope);
-				for (var i = 1; i < rhs.length; i++) {
-					if (scope.arr[rhs[i]]) {
-						scope.arr = scope.arr[rhs[i]];
-					} else {
-						return $timeout(function() {
-							fillArr(scope, rhs);
-						}, 250);
-					}
-				}
-			}
-			return function(scope, element, attr) {
-				var sides = attr.wsort.split(' in ');
-				scope.eln = sides[0].split(' ').join('');
-				sides[1] = sides[1].split(' ').join('');
-				fillArr(scope, sides[1].split('.'));
-			}
-		},
-		template: '<span><span ng-drop="true" ng-drop-success="place($data, $index)" ng-drop-index="$index"><ng-transclude ng-drag="true" ng-drag-data="img" ng-center-anchor="true" data-allow-transform="false" class="newshot-photo"></ng-transclude></span></span>'
-	}
-});
+}]);
