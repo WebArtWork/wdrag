@@ -32,7 +32,7 @@ angular.module("wdrag_directives", []).directive('wdmoderators', function(){
 			}
 			wdrag.bags[$scope.bag].push($scope.arr);
 			if($scope.modify) wdrag.bags[$scope.bag+'_modify'].push($scope.modify);
-			let refresh = () => {
+			var refresh = function(){
 				for (var j = 0; j < wdrag.bags[$scope.bag].length; j++) {
 					for (var i = 0; i < wdrag.bags[$scope.bag][j].length; i++) {
 						if(typeof wdrag.bags[$scope.bag][j][i] == 'string')
@@ -69,7 +69,7 @@ angular.module("wdrag_directives", []).directive('wdmoderators', function(){
 				if (typeof place != 'number') return refresh_index();
 				$timeout(function() {
 					for (var j = 0; j < wdrag.bags[$scope.bag].length; j++) {
-						let found = false;
+						var found = false;
 						for (var i = 0; i < wdrag.bags[$scope.bag][j].length; i++) {
 							if (wdrag.bags[$scope.bag][j][i].index == $scope.dragging.index) {
 								wdrag.bags[$scope.bag+'_modify'][j].modified = true;
@@ -80,12 +80,12 @@ angular.module("wdrag_directives", []).directive('wdmoderators', function(){
 						if(found) break;
 					}
 					for (var k = 0; k < wdrag.bags[$scope.bag].length; k++) {
-						let found = false;
+						var found = false;
 						for (var l = 0; l < wdrag.bags[$scope.bag][k].length; l++) {
 							if (wdrag.bags[$scope.bag][k][l].index == place) {
 								wdrag.bags[$scope.bag][j].splice(i, 1);
 								wdrag.bags[$scope.bag][k].splice(l, 0, $scope.dragging);
-								end_drag = () => {
+								end_drag = function(){
 									wdrag.bags[$scope.bag + '_modify'][k].modified = true;
 									if(typeof $scope.change == 'function') $scope.change();
 								}
